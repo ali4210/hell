@@ -1,11 +1,90 @@
-how to setup ansible in kali linux as a master(192.168.0.150) and in ParrotOS as a node (192.168.0.122)
+# 🚀 Ansible Multi-Node Setup Guide
 
-I'll guide you through setting up Ansible with Kali Linux as the master (control node) and Parrot OS as the managed node.
+[![Ansible](https://img.shields.io/badge/Ansible-EE0000?style=for-the-badge&logo=ansible&logoColor=white)](https://www.ansible.com/)
+[![Kali Linux](https://img.shields.io/badge/Kali_Linux-557C94?style=for-the-badge&logo=kali-linux&logoColor=white)](https://www.kali.org/)
+[![CentOS](https://img.shields.io/badge/CentOS-262577?style=for-the-badge&logo=centos&logoColor=white)](https://www.centos.org/)
+[![Parrot OS](https://img.shields.io/badge/Parrot_OS-33CCCC?style=for-the-badge&logo=linux&logoColor=white)](https://www.parrotsec.org/)
 
-Step 1: Install Ansible on Kali Linux (Master)
-On your Kali Linux machine (192.168.0.150):
+> A comprehensive guide to setting up Ansible with Kali Linux as the master node, managing both Parrot OS and CentOS nodes for multi-distribution infrastructure automation.
 
-bash
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation Steps](#installation-steps)
+  - [Step 1: Install Ansible on Kali Linux](#step-1-install-ansible-on-kali-linux-master)
+  - [Step 2: Configure SSH Access](#step-2-configure-ssh-access)
+  - [Step 3: Configure Ansible Inventory](#step-3-configure-ansible-inventory)
+  - [Step 4: Setup Python on Nodes](#step-4-setup-python-on-nodes)
+  - [Step 5: Test Connections](#step-5-test-connections)
+- [Multi-Node Configuration](#multi-node-configuration)
+- [Playbook Examples](#playbook-examples)
+- [Troubleshooting](#troubleshooting)
+- [Best Practices](#best-practices)
+- [Resources](#resources)
+
+---
+
+## 🎯 Overview
+
+This project demonstrates setting up an Ansible automation environment with:
+- **Master Node**: Kali Linux (192.168.0.150)
+- **Managed Nodes**:
+  - Parrot OS (192.168.0.122)
+  - CentOS (192.168.0.202)
+
+Ansible enables infrastructure automation, configuration management, and application deployment across heterogeneous Linux environments.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│          Ansible Master (Kali Linux)            │
+│              IP: 192.168.0.150                  │
+│                                                 │
+│  • Ansible Control Node                        │
+│  • SSH Key Management                           │
+│  • Playbook Execution                           │
+└────────────┬────────────────────┬───────────────┘
+             │                    │
+             │ SSH                │ SSH
+             │                    │
+    ┌────────▼─────────┐  ┌──────▼──────────┐
+    │   Parrot OS      │  │    CentOS       │
+    │  192.168.0.122   │  │  192.168.0.202  │
+    │                  │  │                 │
+    │  Debian-based    │  │  RedHat-based   │
+    │  Uses: apt       │  │  Uses: yum/dnf  │
+    └──────────────────┘  └─────────────────┘
+```
+
+---
+
+## ✅ Prerequisites
+
+### On All Machines:
+- Linux operating system installed and running
+- Network connectivity between all nodes
+- SSH service enabled
+- Python 3 installed
+
+### Required Information:
+- IP addresses of all nodes
+- Username and password for each node
+- Sudo privileges on managed nodes
+
+---
+
+## 🛠️ Installation Steps
+
+### Step 1: Install Ansible on Kali Linux (Master)
+
+On your Kali Linux machine:
+
+```bash
 # Update package lists
 sudo apt update
 
@@ -14,172 +93,105 @@ sudo apt install ansible -y
 
 # Verify installation
 ansible --version
-Step 2: Configure SSH Access
-Ansible uses SSH to communicate with nodes. You need passwordless SSH access from master to node.
+```
 
-On Kali Linux (Master):
+**Expected Output:**
+```
+ansible [core 2.x.x]
+  config file = /etc/ansible/ansible.cfg
+  configured module search path = ['/home/kali/.ansible/plugins/modules']
+  ansible python module location = /usr/lib/python3/dist-packages/ansible
+  executable location = /usr/bin/ansible
+  python version = 3.x.x
+```
 
-bash
-# Generate SSH key pair (if you don't have one)
+---
+
+### Step 2: Configure SSH Access
+
+Ansible uses SSH for communication. Set up passwordless SSH authentication.
+
+#### Generate SSH Key on Master
+
+```bash
+# Generate SSH key pair
 ssh-keygen -t rsa -b 4096
 
 # Press Enter to accept default location
-# You can set a passphrase or leave it empty for passwordless access
-Copy the SSH key to Parrot OS:
+# You can set a passphrase or leave it empty
+```
 
-bash
-# Replace 'user' with your actual username on Parrot OS
+#### Copy SSH Key to Managed Nodes
+
+**For Parrot OS:**
+```bash
 ssh-copy-id user@192.168.0.122
-You'll be prompted for the Parrot OS user's password. After this, test the connection:
+```
 
-bash
+**For CentOS:**
+```bash
+ssh-copy-id saleem@192.168.0.202
+```
+
+#### Test SSH Connection
+
+```bash
+# Test Parrot OS
 ssh user@192.168.0.122
-If you can log in without a password, you're good to go.
 
-Step 3: Configure Ansible Inventory
+# Test CentOS
+ssh saleem@192.168.0.202
+```
+
+If you can log in without a password, SSH is configured correctly.
+
+#### Troubleshooting SSH on CentOS (SELinux)
+
+If passwordless SSH doesn't work on CentOS:
+
+```bash
+# On CentOS node, fix permissions
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+
+# Fix SELinux context
+restorecon -R -v ~/.ssh
+
+# Verify SSH server configuration
+sudo nano /etc/ssh/sshd_config
+# Ensure these lines are uncommented:
+# PubkeyAuthentication yes
+# AuthorizedKeysFile .ssh/authorized_keys
+
+# Restart SSH service
+sudo systemctl restart sshd
+```
+
+---
+
+### Step 3: Configure Ansible Inventory
+
 Create an inventory file to define your managed nodes.
 
-bash
-# Create a directory for your Ansible project
+```bash
+# Create project directory
 mkdir -p ~/ansible-project
 cd ~/ansible-project
 
 # Create inventory file
 nano inventory.ini
-Add the following content:
-
-ini
-[parrot_nodes]
-parrot-node1 ansible_host=192.168.0.122 ansible_user=user
-
-[parrot_nodes:vars]
-ansible_python_interpreter=/usr/bin/python3
-Replace user with your actual Parrot OS username.
-
-Step 4: Test the Connection
-Run a ping test to verify connectivity:
-
-bash
-ansible -i inventory.ini all -m ping
 ```
 
-You should see a SUCCESS response like:
-```
-parrot-node1 | SUCCESS => {
-    "changed": false,
-    "ping": "pong"
-}
-Step 5: Ensure Python is Installed on Parrot OS
-On Parrot OS (192.168.0.122):
+**Add the following content:**
 
-bash
-# Check if Python 3 is installed
-python3 --version
-
-# If not installed, install it
-sudo apt update
-sudo apt install python3 -y
-Step 6: Run Your First Ansible Command
-Try some basic Ansible ad-hoc commands:
-
-bash
-# Check uptime
-ansible -i inventory.ini all -m command -a "uptime"
-
-# Get disk space
-ansible -i inventory.ini all -m command -a "df -h"
-
-# Install a package (requires sudo privileges)
-ansible -i inventory.ini all -m apt -a "name=htop state=present" --become
-Step 7: Create a Simple Playbook (Optional)
-Create a playbook to automate tasks:
-
-bash
-nano test-playbook.yml
-Add this content:
-
-yaml
----
-- name: Test Playbook for Parrot OS
-  hosts: parrot_nodes
-  become: yes
-  tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
-    - name: Install basic packages
-      apt:
-        name:
-          - vim
-          - curl
-          - wget
-        state: present
-
-    - name: Create a test file
-      file:
-        path: /tmp/ansible-test.txt
-        state: touch
-        mode: '0644'
-Run the playbook:
-
-bash
-ansible-playbook -i inventory.ini test-playbook.yml
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
----------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-Is it possible to include another node in my inventory.ini so that I can also run Ansible as a master from Kali Linux to that another Linux machine and that is CentOS which will be working as my node too. Is it possible to connect both machines via Ansible?
-
-Yes, absolutely! You can manage multiple nodes with different Linux distributions from a single Ansible master. Ansible is distribution-agnostic and can manage various Linux flavors simultaneously.
-
-Step 1: Set Up SSH Access to CentOS Node
-On your Kali Linux (Master):
-
-bash
-# Copy SSH key to CentOS node (replace with your CentOS IP and username)
-ssh-copy-id user@192.168.0.XXX
-
-# Test SSH connection
-ssh user@192.168.0.XXX
-Step 2: Update Your Inventory File
-Edit your inventory.ini:
-
-bash
-nano ~/ansible-project/inventory.ini
-Update it to include both nodes:
-
-ini
+```ini
 # Parrot OS Node
 [parrot_nodes]
 parrot-node1 ansible_host=192.168.0.122 ansible_user=user
 
 # CentOS Node
 [centos_nodes]
-centos-node1 ansible_host=192.168.0.XXX ansible_user=centos_username
+centos-node1 ansible_host=192.168.0.202 ansible_user=saleem
 
 # Group all Debian-based systems
 [debian_based]
@@ -201,38 +213,115 @@ ansible_python_interpreter=/usr/bin/python3
 # Variables for CentOS
 [centos_nodes:vars]
 ansible_python_interpreter=/usr/bin/python3
-Replace:
+```
 
-192.168.0.XXX with your CentOS IP address
-centos_username with your actual CentOS username
-Step 3: Test Connection to Both Nodes
-bash
+**Replace:**
+- `user` with your actual Parrot OS username
+- `saleem` with your actual CentOS username
+
+---
+
+### Step 4: Setup Python on Nodes
+
+Ensure Python 3 is installed on all managed nodes.
+
+**On Parrot OS:**
+```bash
+sudo apt update
+sudo apt install python3 -y
+python3 --version
+```
+
+**On CentOS:**
+```bash
+sudo yum install python3 -y
+python3 --version
+```
+
+---
+
+### Step 5: Test Connections
+
+#### Test with Ansible Ping Module
+
+```bash
 # Test all nodes
-ansible -i inventory.ini all_nodes -m ping -K
+ansible -i inventory.ini all_nodes -m ping
 
 # Test only Parrot OS
-ansible -i inventory.ini parrot_nodes -m ping -K
+ansible -i inventory.ini parrot_nodes -m ping
 
 # Test only CentOS
-ansible -i inventory.ini centos_nodes -m ping -K
-Step 4: Create a Multi-Distribution Playbook
-Since CentOS uses yum/dnf instead of apt, you need distribution-aware playbooks:
+ansible -i inventory.ini centos_nodes -m ping
+```
 
-bash
+**Expected Output:**
+```
+parrot-node1 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+centos-node1 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+#### Run Ad-Hoc Commands
+
+```bash
+# Check uptime on all nodes
+ansible -i inventory.ini all_nodes -m command -a "uptime"
+
+# Get disk space
+ansible -i inventory.ini all_nodes -m command -a "df -h"
+
+# Check OS information
+ansible -i inventory.ini all_nodes -m command -a "uname -a"
+```
+
+---
+
+## 🌐 Multi-Node Configuration
+
+### Understanding Groups
+
+Ansible allows you to group nodes for targeted management:
+
+- `parrot_nodes` - Only Parrot OS systems
+- `centos_nodes` - Only CentOS systems
+- `debian_based` - All Debian-family distributions
+- `redhat_based` - All RedHat-family distributions
+- `all_nodes` - All managed systems
+
+### Target Specific Groups
+
+```bash
+# Run commands on Debian-based systems only
+ansible -i inventory.ini debian_based -m command -a "apt --version"
+
+# Run commands on RedHat-based systems only
+ansible -i inventory.ini redhat_based -m command -a "yum --version"
+```
+
+---
+
+## 📝 Playbook Examples
+
+### Basic Multi-Distribution Playbook
+
+Create a playbook that handles both Debian and RedHat systems:
+
+```bash
 nano multi-node-playbook.yml
-Add this content:
+```
 
-yaml
+```yaml
 ---
 - name: Configure Debian-based systems (Parrot OS)
   hosts: debian_based
   become: yes
   tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-
     - name: Install packages on Debian-based systems
       apt:
         name:
@@ -241,15 +330,21 @@ yaml
           - wget
           - htop
         state: present
+        update_cache: no
 
 - name: Configure RedHat-based systems (CentOS)
   hosts: redhat_based
   become: yes
   tasks:
+    - name: Enable EPEL repository
+      yum:
+        name: epel-release
+        state: present
+    
     - name: Update yum cache
       yum:
         update_cache: yes
-
+      
     - name: Install packages on RedHat-based systems
       yum:
         name:
@@ -268,115 +363,320 @@ yaml
         path: /tmp/ansible-test
         state: directory
         mode: '0755'
-
+        
     - name: Create a test file
       copy:
         content: "Managed by Ansible from Kali Linux\n"
         dest: /tmp/ansible-test/info.txt
         mode: '0644'
-
+        
     - name: Get system information
       command: uname -a
       register: system_info
-
+      
     - name: Display system info
       debug:
         msg: "{{ inventory_hostname }}: {{ system_info.stdout }}"
-Step 5: Run the Multi-Node Playbook
-bash
-ansible-playbook -i inventory.ini multi-node-playbook.yml -K
-Alternative: Using Package Module (Distribution-Agnostic)
-You can also use Ansible's package module which automatically detects the package manager:
+```
 
-bash
-nano simple-playbook.yml
-yaml
+**Run the playbook:**
+
+```bash
+ansible-playbook -i inventory.ini multi-node-playbook.yml -K
+```
+
+The `-K` flag prompts for the sudo password.
+
+---
+
+### Distribution-Agnostic Playbook
+
+Using the `package` module for automatic package manager detection:
+
+```yaml
 ---
 - name: Configure all nodes (distribution-agnostic)
   hosts: all_nodes
   become: yes
   tasks:
-    - name: Install common packages (works on both apt and yum)
+    - name: Install common packages
       package:
         name:
           - vim
           - curl
           - wget
         state: present
-
+        
     - name: Create test file
       file:
         path: /tmp/ansible-managed.txt
         state: touch
         mode: '0644'
-Run it:
+```
 
-bash
-ansible-playbook -i inventory.ini simple-playbook.yml -K
-Step 6: Run Ad-Hoc Commands on Specific Nodes
-bash
-# Run command on all nodes
-ansible -i inventory.ini all_nodes -m command -a "uptime" -K
+---
 
-# Run only on CentOS
-ansible -i inventory.ini centos_nodes -m command -a "cat /etc/redhat-release" -K
+### OS Information Gathering Playbook
 
-# Run only on Parrot OS
-ansible -i inventory.ini parrot_nodes -m command -a "lsb_release -a" -K
+```yaml
+---
+- name: Check OS Information on All Nodes
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Display OS Information
+      debug:
+        msg: |
+          Hostname: {{ inventory_hostname }}
+          OS Family: {{ ansible_os_family }}
+          Distribution: {{ ansible_distribution }}
+          Distribution Version: {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+```
 
-# Get disk space from all nodes
-ansible -i inventory.ini all_nodes -m command -a "df -h" -K
-Pro Tips
-Different sudo passwords: If nodes have different sudo passwords, you can specify them individually in inventory:
-ini
-[centos_nodes]
-centos-node1 ansible_host=192.168.0.XXX ansible_user=centos_user ansible_become_pass=centos_password
+---
 
-[parrot_nodes]
-parrot-node1 ansible_host=192.168.0.122 ansible_user=parrot_user ansible_become_pass=parrot_password
+## 🔧 Troubleshooting
 
+### Common Issues and Solutions
 
+#### 1. SSH Connection Issues
 
+**Problem:** `Permission denied (publickey,password)`
 
+**Solution:**
+```bash
+# Verify SSH key is copied
+ssh user@192.168.0.122
 
+# Re-copy SSH key if needed
+ssh-copy-id -i ~/.ssh/id_rsa.pub user@192.168.0.122
+```
 
+---
 
+#### 2. Missing Sudo Password
 
-----------------------------------------------------------------------------------
+**Problem:** `Missing sudo password`
 
+**Solution:**
+```bash
+# Use -K flag when running playbooks
+ansible-playbook -i inventory.ini playbook.yml -K
 
-Okay brother, but the thing is I cannot access my CentOS node without a password or by passwordless entry because after SSH-copy-ID space Saleem@192.168.0.202, doing this it is still requiring password.
+# Or configure passwordless sudo on nodes
+sudo visudo
+# Add: username ALL=(ALL) NOPASSWD: ALL
+```
 
-No problem! Let's troubleshoot the SSH passwordless login issue. This is a common problem with specific causes.
+---
 
-Step 1: Verify SSH Key Was Copied
-On your CentOS node (192.168.0.202), check if the key exists:
+#### 3. Package Not Found (htop on CentOS)
 
-bash
-# Check if authorized_keys file exists and has content
-cat ~/.ssh/authorized_keys
+**Problem:** `No package htop available`
 
-# Check permissions
-ls -la ~/.ssh/
-ls -la ~/.ssh/authorized_keys
-The file should contain your public key from Kali Linux.
+**Solution:**
+```bash
+# Enable EPEL repository first
+ansible -i inventory.ini centos_nodes -m yum -a "name=epel-release state=present" --become -K
+```
 
-Step 2: Fix Permissions on CentOS
-SSH is very strict about permissions. On your CentOS node:
+---
 
-bash
-# Set correct permissions for .ssh directory
+#### 4. Apt Cache Update Failure (Parrot OS)
+
+**Problem:** `Failed to update apt cache`
+
+**Solution:**
+```bash
+# On Parrot OS node
+sudo killall apt apt-get
+sudo rm -f /var/lib/apt/lists/lock
+sudo rm -f /var/cache/apt/archives/lock
+sudo rm -f /var/lib/dpkg/lock*
+sudo dpkg --configure -a
+sudo apt clean
+sudo apt update
+
+# Or skip cache update in playbook
+update_cache: no
+```
+
+---
+
+#### 5. SELinux Blocking SSH Keys (CentOS)
+
+**Problem:** SSH key authentication not working on CentOS
+
+**Solution:**
+```bash
+# On CentOS node
+restorecon -R -v ~/.ssh
 chmod 700 ~/.ssh
-
-# Set correct permissions for authorized_keys
 chmod 600 ~/.ssh/authorized_keys
+```
 
-# Ensure your home directory isn't too open
-chmod 755 ~
+---
 
-# Check ownership (should be your username)
-ls -la ~/.ssh/
+### Verbose Mode for Debugging
 
+```bash
+# Run with verbose output
+ansible -i inventory.ini all -m ping -v
+ansible -i inventory.ini all -m ping -vv
+ansible -i inventory.ini all -m ping -vvv
 
+# Debug SSH connection
+ssh -v user@192.168.0.122
+```
 
-ANd Try Your Passwordless SSH Entry Again...........DONE>>>>>>>>>>>>>>>
+---
+
+## 🎓 Best Practices
+
+### 1. Security
+
+- ✅ Use SSH keys instead of passwords
+- ✅ Use Ansible Vault for sensitive data
+- ✅ Limit sudo access appropriately
+- ✅ Keep your master node secure
+
+### 2. Inventory Management
+
+- ✅ Organize hosts into logical groups
+- ✅ Use descriptive hostnames
+- ✅ Document your inventory structure
+- ✅ Use variables for repeated values
+
+### 3. Playbook Design
+
+- ✅ Make playbooks idempotent (safe to run multiple times)
+- ✅ Use roles for complex configurations
+- ✅ Handle errors gracefully with `ignore_errors` or `failed_when`
+- ✅ Test playbooks in a staging environment first
+
+### 4. Version Control
+
+- ✅ Store playbooks and inventory in Git
+- ✅ Use meaningful commit messages
+- ✅ Create branches for experimental changes
+- ✅ Document changes in README
+
+---
+
+## 📚 Useful Commands Cheat Sheet
+
+### Ad-Hoc Commands
+
+```bash
+# Ping all nodes
+ansible -i inventory.ini all -m ping
+
+# Run shell command
+ansible -i inventory.ini all -m shell -a "uptime"
+
+# Check disk space
+ansible -i inventory.ini all -m command -a "df -h"
+
+# Install package (requires sudo)
+ansible -i inventory.ini all -m package -a "name=git state=present" --become -K
+
+# Copy file to nodes
+ansible -i inventory.ini all -m copy -a "src=/local/file dest=/remote/file" --become
+
+# Gather facts
+ansible -i inventory.ini all -m setup
+
+# Filter specific facts
+ansible -i inventory.ini all -m setup -a "filter=ansible_distribution*"
+```
+
+### Playbook Commands
+
+```bash
+# Run playbook
+ansible-playbook -i inventory.ini playbook.yml
+
+# With sudo password prompt
+ansible-playbook -i inventory.ini playbook.yml -K
+
+# Check syntax
+ansible-playbook -i inventory.ini playbook.yml --syntax-check
+
+# Dry run (check mode)
+ansible-playbook -i inventory.ini playbook.yml --check
+
+# Limit to specific hosts
+ansible-playbook -i inventory.ini playbook.yml --limit centos_nodes
+
+# Start at specific task
+ansible-playbook -i inventory.ini playbook.yml --start-at-task="task name"
+
+# Run with tags
+ansible-playbook -i inventory.ini playbook.yml --tags "install,configure"
+```
+
+---
+
+## 🔗 Resources
+
+### Official Documentation
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Ansible Getting Started](https://docs.ansible.com/ansible/latest/getting_started/index.html)
+- [Ansible Best Practices](https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html)
+
+### Learning Resources
+- [Ansible for DevOps](https://www.ansiblefordevops.com/)
+- [Ansible Galaxy](https://galaxy.ansible.com/) - Community roles and collections
+- [Ansible Examples](https://github.com/ansible/ansible-examples)
+
+### Community
+- [Ansible Community](https://www.ansible.com/community)
+- [Reddit r/ansible](https://www.reddit.com/r/ansible/)
+- [Stack Overflow - Ansible](https://stackoverflow.com/questions/tagged/ansible)
+
+---
+
+## 👨‍💻 Author
+
+**Saleem Ali**
+- LinkedIn: [linkedin.com/in/saleem-ali-189719325](https://www.linkedin.com/in/saleem-ali-189719325/)
+- Currently studying AIOps at Al-Nafi International College
+- Tech enthusiast passionate about automation and infrastructure management
+
+---
+
+## 📄 License
+
+This project is open source and available for educational purposes.
+
+---
+
+## 🙏 Acknowledgments
+
+- Ansible community for excellent documentation
+- Linux community for robust distributions
+- Open source contributors
+
+---
+
+## 📝 Version History
+
+- **v1.0** (November 2025) - Initial setup with Kali Linux master, Parrot OS and CentOS nodes
+
+---
+
+## 🤝 Contributing
+
+Feel free to fork this repository and submit pull requests for improvements!
+
+---
+
+## 📧 Contact
+
+For questions or feedback, connect with me on [LinkedIn](https://www.linkedin.com/in/saleem-ali-189719325/)
+
+---
+
+**Happy Automating! 🚀**
